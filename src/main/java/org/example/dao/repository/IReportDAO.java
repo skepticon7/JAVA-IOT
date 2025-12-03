@@ -1,4 +1,4 @@
 package org.example.dao.repository;
 
-public interface IDeviceDAO {
+public interface IReportDAO {
 }
