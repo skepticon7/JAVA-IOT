@@ -1,28 +1,19 @@
-//package org.example.model;
-//
-//import org.example.enums.Status;
-//import org.example.util.ReadersGenerators;
-//
-//public class HumiditySensor extends Device{
-//
-//    public HumiditySensor(long id , String name , Status isActive) {
-//        super(id, name, isActive);
-//    }
-//
-//    public HumiditySensor(){
-//        super();
-//    }
-//
-//    @Override
-//    public double generateValue() {
-//
-//        return 0;
-//    }
-//
-//    @Override
-//    public void readValue() {
-//        System.out.println(ReadersGenerators.humidityReader(this).read());;
-//    }
-//
-//
-//}
+package org.example.model;
+
+import jakarta.persistence.DiscriminatorValue;
+import jakarta.persistence.Entity;
+import org.example.enums.DeviceType;
+import org.example.enums.Status;
+import org.example.util.ReadersGenerators;
+
+@Entity
+@DiscriminatorValue("HUMIDITY")
+public class HumiditySensor extends Device{
+    public HumiditySensor(String name, DeviceType type, Status status) {
+        super(name, DeviceType.HUMIDITY , status);
+    }
+
+    protected HumiditySensor() {
+        super();
+    }
+}

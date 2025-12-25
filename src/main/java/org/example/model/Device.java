@@ -1,24 +1,73 @@
 package org.example.model;
 
+import jakarta.persistence.*;
 import jdk.jshell.StatementSnippet;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.example.enums.DeviceType;
 import org.example.enums.Status;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
-public abstract class Device implements Runnable {
-    private long id;
+@Entity
+@Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+@DiscriminatorColumn(
+        name = "TYPE",
+        discriminatorType = DiscriminatorType.STRING
+)
+public abstract class Device {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
     private String name;
-    private DeviceType type;
+
+    public List<Reading> getReadings() {
+        return readings;
+    }
+
+    public void setReadings(List<Reading> readings) {
+        this.readings = readings;
+    }
+
+    @Enumerated(EnumType.STRING)
+    private DeviceType deviceType;
+
+    @Enumerated(EnumType.STRING)
     private Status status;
-    protected volatile boolean active = true;
-    protected final MqttClient mqttClient;
-    public LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "device", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    private List<Reading> readings = new ArrayList<>();
+
+//    @Transient
+//    protected volatile boolean active = true;
+//
+//    @Transient
+//    protected MqttClient mqttClient;
+
+    @CreationTimestamp
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    protected Device() {
+
+    }
+
+    public Device(String name, DeviceType deviceType, Status status) {
+        this.name = name;
+        this.deviceType = deviceType;
+        this.status = status;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
 
     public long getId() {
         return id;
@@ -36,15 +85,22 @@ public abstract class Device implements Runnable {
         this.status = status;
     }
 
-    public Device(long id , String name , DeviceType type , Status status , MqttClient mqttClient) {
-        this.id = id;
-        this.name = name;
-        this.status = status;
-        this.type = type;
-        this.mqttClient = mqttClient;
+
+    public DeviceType getType() {
+        return deviceType;
     }
 
+    public void setType(DeviceType type) {
+        this.deviceType = type;
+    }
 
+//    public boolean isActive() {
+//        return active;
+//    }
+//
+//    public void setActive(boolean active) {
+//        this.active = active;
+//    }
 
     public String getName() {
         return name;
@@ -71,64 +127,5 @@ public abstract class Device implements Runnable {
         this.updatedAt = updatedAt;
     }
 
-    public Device(MqttClient mqttClient , DeviceType type) {
-        this.mqttClient = mqttClient;
-        this.name = "N/A";
-        this.status = Status.FUNCTIONAL;
-        this.type = type;
-    }
-
-
-
-    @Override
-    public void run() {
-        if(status.equals(Status.FUNCTIONAL)) {
-            while(status.equals(Status.FUNCTIONAL)) {
-                double value = generateValue();
-                publishTelemetry(value);
-                sleep();
-            }
-        }
-    }
-
-    protected void sleep() {
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    public void stop() {
-        this.active = false;
-    }
-
-    protected void publishTelemetry(double value) {
-        try {
-            if (mqttClient.isConnected()) {
-                String topic = "iot/"  + type + "/" + id + "/telemetry";
-                String payload = """
-                {"deviceId": %d, "type": "%s", "value": %.2f, "timestamp": "%s"}
-                """.formatted(id, type, value, Instant.now());
-
-                MqttMessage message = new MqttMessage(payload.getBytes());
-                message.setQos(1);
-                mqttClient.publish(topic, message);
-            } else {
-                System.out.println("MQTT client is not connected, skipping publish for device " + id);
-            }
-        } catch (MqttException e) {
-            e.printStackTrace();
-        }
-    }
-
-    @Override
-    public String toString() {
-        return "Device [id=" + id + ", name=" + name + ", status=" + status + "]";
-    }
-
-    public abstract double generateValue();
-
-    public abstract void readValue();
 
 }

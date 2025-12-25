@@ -1,22 +1,20 @@
-//package org.example.model;
-//
-//import org.example.enums.Status;
-//import org.example.util.ReadersGenerators;
-//
-//public class AirQualitySensor extends Device{
-//
-//
-//    public AirQualitySensor(long id , String name , Status status) {
-//        super(id , name , status);
-//    }
-//
-//    @Override
-//    public double generateValue() {
-//        return 0;
-//    }
-//
-//    @Override
-//    public void readValue() {
-//        System.out.println(ReadersGenerators.airQualityReader(this).read());;
-//    }
-//}
+package org.example.model;
+
+import jakarta.persistence.DiscriminatorValue;
+import jakarta.persistence.Entity;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.example.enums.DeviceType;
+import org.example.enums.Status;
+import org.example.util.ReadersGenerators;
+
+@Entity
+@DiscriminatorValue("AIR_QUALITY")
+public class AirQualitySensor extends Device {
+    protected AirQualitySensor() {
+        super();
+    }
+
+    public AirQualitySensor(String name, DeviceType type, Status status) {
+        super(name, DeviceType.AIR_QUALITY , status);
+    }
+}

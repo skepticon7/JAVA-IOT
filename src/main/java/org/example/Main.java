@@ -2,13 +2,20 @@ package org.example;
 
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttException;
+import org.example.configuration.HibernateConfig;
+import org.example.coordinators.DeviceSensorCoordinator;
+import org.example.dao.implementation.DeviceDAO;
+import org.example.dao.implementation.ReadingDAO;
 import org.example.enums.DeviceType;
 import org.example.enums.Status;
 import org.example.manager.TemperatureManager;
 import org.example.model.Device;
 import org.example.model.TemperatureSensor;
 import org.example.mqtt.MqttClientProvider;
+import org.example.service.DeviceService;
+import org.example.service.ReadingService;
 import org.example.service.Temperature.TemperatureReadingService;
+import org.example.ui.SensorHubApp;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -24,36 +31,30 @@ import java.util.stream.Collectors;
 public class Main {
     public static void main(String[] args) throws MqttException {
 
+        HibernateConfig.getSessionFactory().openSession().clear();
+
         MqttClient mqttClient = MqttClientProvider.getMqttClient();
-        if (!mqttClient.isConnected()) {
-            mqttClient.connect();
-        }
 
-        TemperatureReadingService readingService = new TemperatureReadingService(mqttClient);
+        DeviceDAO deviceDAO = new DeviceDAO();
+        DeviceService deviceService = new DeviceService(deviceDAO);
 
-        readingService.start();
+        ReadingDAO readingDAO = new ReadingDAO();
+        ReadingService readingService = new ReadingService(readingDAO , deviceDAO);
 
-        TemperatureManager manager = new TemperatureManager();
+        TemperatureManager temperatureManager = new TemperatureManager();
 
-        for (long i = 1 ; i <= 4; i++) {
-            TemperatureSensor sensor = new TemperatureSensor(
-                    i,
-                    "TempSensor-"+i,
-                    DeviceType.TEMPERATURE,
-                    Status.FUNCTIONAL,
-                    mqttClient
-            );
-            manager.addSensor(sensor);
-        }
+        TemperatureReadingService temperatureReadingService = new TemperatureReadingService(mqttClient , readingService);
 
-        try {
-            Thread.sleep(60000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
 
-        manager.stopAll();
 
+        DeviceSensorCoordinator deviceSensorCoordinator = new DeviceSensorCoordinator(
+                deviceService,
+                readingService,
+                temperatureManager,
+                temperatureReadingService
+        );
+
+        SensorHubApp.launchApp(deviceSensorCoordinator , args);
 
     }
 }
