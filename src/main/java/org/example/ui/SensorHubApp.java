@@ -25,11 +25,14 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.util.Duration;
 import org.example.coordinators.DeviceSensorCoordinator;
+import org.example.enums.DeviceType;
+import org.example.enums.Status;
 import org.example.model.Device;
 import org.example.model.Reading;
 import org.example.model.TemperatureSensor;
 import org.example.mqtt.MqttClientProvider;
 import org.example.runners.TemperatureSensorRunner;
+import org.example.util.MqttConnectionListener;
 
 import java.io.*;
 import java.util.*;
@@ -45,6 +48,8 @@ public class SensorHubApp extends Application {
     private String selectedView = "Dashboard";
     private Timeline updateTimeline;
     private static DeviceSensorCoordinator coordinator;
+    private Button activeNavButton;
+    private Label mqttStatusLabel;
 
     public SensorHubApp() {
 
@@ -77,11 +82,12 @@ public class SensorHubApp extends Application {
             sensors.clear();
             List<TemperatureSensor> temperatureSensorList = coordinator.getDeviceService().getAllTemperatureSensors();
             temperatureSensorList.forEach(tmp -> {
-                sensors.add(new Sensor(tmp.getName() , tmp.getType().toString() , tmp.getStatus().toString()));
+                sensors.add(new Sensor(tmp.getId() , tmp.getName() , tmp.getType().toString() , tmp.getStatus().toString()));
             });
             sensors.forEach(this::createSensorCard);
-            updateContent();
-            coordinator.start(temperatureSensorList);
+
+            List<TemperatureSensor> activeTemperatureSensors = temperatureSensorList.stream().filter(sensor -> sensor.getStatus().equals(Status.ACTIVE)).toList();
+            coordinator.start(activeTemperatureSensors);
 
             coordinator.getReadingService().addListener(reading -> {
                 Platform.runLater(() -> {
@@ -95,10 +101,37 @@ public class SensorHubApp extends Application {
         }
     }
 
+    private void setupMqttStatusListener() {
+        coordinator.getTemperatureReadingService().setConnectionListener(new MqttConnectionListener() {
+            @Override
+            public void onConnect() {
+                Platform.runLater(() -> {
+                    mqttStatusLabel.setText("MQTT Connected");
+                    mqttStatusLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+                    loadSensorsFromDB(); // reload active sensors
+                });
+            }
+
+            @Override
+            public void onDisconnect(Throwable cause) {
+                Platform.runLater(() -> {
+                    mqttStatusLabel.setText("MQTT Disconnected");
+                    mqttStatusLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+
+                    // Clear all active sensor values
+                    for (Sensor s : sensors) {
+                        s.setValue("--");
+                    }
+                    updateContent();
+                });
+            }
+        });
+    }
+
     private void updateSensorValueInUI(Reading reading) {
         for (Sensor s : sensors) {
             if (s.getName().equalsIgnoreCase(reading.getDevice().getName())) {
-                s.value = reading.getValue();
+                s.value = String.valueOf(reading.getValue());
             }
         }
         updateContent();
@@ -292,6 +325,7 @@ public class SensorHubApp extends Application {
     }
 
     private void showDashboard() {
+
         mainLayout = new BorderPane();
         mainLayout.setStyle("-fx-background-color: linear-gradient(to bottom right, #1e293b, #581c87, #1e293b);");
 
@@ -306,6 +340,13 @@ public class SensorHubApp extends Application {
         scrollPane.setFitToWidth(true);
         scrollPane.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
         mainLayout.setCenter(scrollPane);
+
+//        mqttStatusLabel = new Label("MQTT Disconnected");
+//        mqttStatusLabel.setFont(Font.font("Inter", FontWeight.BOLD, 16));
+//        mqttStatusLabel.setStyle("-fx-text-fill: red; -fx-padding: 10;");
+//        contentArea.getChildren().add(0, mqttStatusLabel);
+
+//        setupMqttStatusListener();
 
         loadSensorsFromDB();
         updateContent();
@@ -371,6 +412,7 @@ public class SensorHubApp extends Application {
 
         Button dashBtn = createNavButton("Dashboard", "Dashboard");
         dashBtn.setCursor(Cursor.HAND);
+        setNavButtonActive(dashBtn);
 
         Button tempBtn = createNavButton("Temperature", "Temperature");
         tempBtn.setCursor(Cursor.HAND);
@@ -386,6 +428,7 @@ public class SensorHubApp extends Application {
         VBox.setVgrow(spacer, Priority.ALWAYS);
 
         Button exportBtn = new Button("Export CSV");
+        exportBtn.setCursor(Cursor.HAND);
         exportBtn.setMaxWidth(Double.MAX_VALUE);
         exportBtn.setStyle("-fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: white; -fx-background-radius: 10; -fx-padding: 10;");
         exportBtn.setOnAction(e -> exportCSV());
@@ -396,28 +439,34 @@ public class SensorHubApp extends Application {
     }
 
     private Button createNavButton(String text, String view) {
-
         Button btn = new Button(text);
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setAlignment(Pos.CENTER_LEFT);
-
-        btn.setStyle("-fx-background-color: rgba(255,255,255,0.05); -fx-text-fill: #c4b5fd; -fx-font-weight: bold; -fx-background-radius: 5; -fx-padding: 12;");
+        setNavButtonInactive(btn);
 
         btn.setOnAction(e -> {
-            System.out.println("here");
             selectedView = view;
+            setNavButtonActive(btn);
             updateContent();
         });
 
         btn.setOnMouseEntered(e -> {
-            btn.setStyle("-fx-background-color: rgba(255,255,255,0.2); -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5; -fx-padding: 12;");
+            if (btn != activeNavButton) {
+                btn.setStyle(
+                        "-fx-background-color: rgba(255,255,255,0.2);" +
+                                "-fx-text-fill: white;" +
+                                "-fx-font-weight: bold;" +
+                                "-fx-background-radius: 8;" +
+                                "-fx-padding: 12;"
+                );
+            }
         });
 
         btn.setOnMouseExited(e -> {
-            btn.setStyle("-fx-background-color: rgba(255,255,255,0.05); -fx-text-fill: #c4b5fd; -fx-font-weight: bold;  -fx-background-radius: 5; -fx-padding: 12;");
+            if (btn != activeNavButton) {
+                setNavButtonInactive(btn);
+            }
         });
-
-
 
         return btn;
     }
@@ -442,14 +491,14 @@ public class SensorHubApp extends Application {
         statsGrid.setHgap(15);
         statsGrid.setVgap(15);
 
-        int activeCount = (int) sensors.stream().filter(s -> s.getStatus().equals("Active")).count();
-        int warningCount = (int) sensors.stream().filter(s -> s.getStatus().equals("Warning")).count();
-        int inactiveCount = (int) sensors.stream().filter(s -> s.getStatus().equals("Inactive")).count();
+        int activeCount = (int) sensors.stream().filter(s -> s.getStatus().equals("ACTIVE")).count();
+        int maintenanceCount = (int) sensors.stream().filter(s -> s.getStatus().equals("MAINTENANCE")).count();
+        int stoppedCount = (int) sensors.stream().filter(s -> s.getStatus().equals("STOPPED")).count();
 
         statsGrid.add(createStatCard("Total Sensors", String.valueOf(sensors.size()), "#a855f7"), 0, 0);
-        statsGrid.add(createStatCard("Active", String.valueOf(activeCount), "#10b981"), 1, 0);
-        statsGrid.add(createStatCard("Warnings", String.valueOf(warningCount), "#f59e0b"), 2, 0);
-        statsGrid.add(createStatCard("Inactive", String.valueOf(inactiveCount), "#6b7280"), 3, 0);
+        statsGrid.add(createStatCard("Active", String.valueOf(activeCount), getStatusColor(Status.ACTIVE.toString())), 1, 0);
+        statsGrid.add(createStatCard("Maintenance", String.valueOf(maintenanceCount), getStatusColor(Status.MAINTENANCE.toString())), 2, 0);
+        statsGrid.add(createStatCard("Stopped", String.valueOf(stoppedCount), getStatusColor(Status.STOPPED.toString())), 3, 0);
 
         // Status Bars
         VBox statusBox = new VBox(15);
@@ -461,9 +510,9 @@ public class SensorHubApp extends Application {
         statusTitle.setStyle("-fx-text-fill: white;");
 
         statusBox.getChildren().add(statusTitle);
-        statusBox.getChildren().add(createStatusBar("Active", activeCount, sensors.size(), "#10b981"));
-        statusBox.getChildren().add(createStatusBar("Warning", warningCount, sensors.size(), "#f59e0b"));
-        statusBox.getChildren().add(createStatusBar("Inactive", inactiveCount, sensors.size(), "#6b7280"));
+        statusBox.getChildren().add(createStatusBar("Active", activeCount, sensors.size(), getStatusColor(Status.ACTIVE.toString())));
+        statusBox.getChildren().add(createStatusBar("Maintenance", maintenanceCount, sensors.size() , getStatusColor(Status.MAINTENANCE.toString())));
+        statusBox.getChildren().add(createStatusBar("Stopped", stoppedCount, sensors.size(), getStatusColor(Status.STOPPED.toString())));
 
         // Type Stats
         GridPane typeGrid = new GridPane();
@@ -472,9 +521,45 @@ public class SensorHubApp extends Application {
 
         typeGrid.add(createTypeStatCard("Temperature", "°C", "#ef4444"), 0, 0);
         typeGrid.add(createTypeStatCard("Humidity", "%", "#3b82f6"), 1, 0);
-        typeGrid.add(createTypeStatCard("Air Quality", "AQI", "#10b981"), 2, 0);
+        typeGrid.add(createTypeStatCard("Air_Quality", "AQI", "#10b981"), 2, 0);
 
         contentArea.getChildren().addAll(title, statsGrid, statusBox, typeGrid);
+    }
+
+    private void setNavButtonActive(Button btn) {
+        if (activeNavButton != null) {
+            setNavButtonInactive(activeNavButton);
+        }
+
+        btn.setStyle(
+                "-fx-background-color: rgba(168,85,247,0.4);" + // purple highlight
+                        "-fx-text-fill: white;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-background-radius: 8;" +
+                        "-fx-padding: 12;"
+        );
+
+        activeNavButton = btn;
+    }
+
+    private void setNavButtonInactive(Button btn) {
+        btn.setStyle(
+                "-fx-background-color: rgba(255,255,255,0.05);" +
+                        "-fx-text-fill: #c4b5fd;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-background-radius: 8;" +
+                        "-fx-padding: 12;"
+        );
+    }
+
+    private String getFormatedSensorName(String sensor) {
+        if(sensor == null) return "Sensor";
+        return switch (sensor) {
+            case "TEMPERATURE" -> "Temperature";
+            case "HUMIDITY" -> "Humidity";
+            case "AIR_QUALITY" -> "Air Quality";
+            default -> "Sensor";
+        };
     }
 
     private VBox createStatCard(String label, String value, String color) {
@@ -517,6 +602,7 @@ public class SensorHubApp extends Application {
     }
 
     private VBox createTypeStatCard(String type, String unit, String color) {
+
         VBox card = new VBox(10);
         card.setPadding(new Insets(20));
         card.setPrefWidth(280);
@@ -525,11 +611,22 @@ public class SensorHubApp extends Application {
         Label typeLabel = new Label(type);
         typeLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14;");
 
-        long count = sensors.stream().filter(s -> s.getType().equals(type)).count();
+        String typeFormated = DeviceType.valueOf(type.toUpperCase()).toString();
+
+        long count = sensors.stream().filter(s -> s.getStatus().equalsIgnoreCase(Status.ACTIVE.toString())).filter(s -> s.getType().equals(typeFormated)).count();
         Label countLabel = new Label(count + " sensors");
         countLabel.setStyle("-fx-text-fill: #c4b5fd; -fx-font-size: 11;");
 
-        double avg = sensors.stream().filter(s -> s.getType().equals(type)).mapToDouble(Sensor::getValue).average().orElse(0);
+        double avg = sensors.stream()
+                .filter(s -> s.getStatus().equalsIgnoreCase(Status.ACTIVE.toString()))
+                .filter(s -> s.getType().equals(typeFormated))
+                .map(Sensor::getValue)
+                .filter(v -> v != null && !v.equals("--"))
+                .mapToDouble(Double::parseDouble)
+                .average()
+                .orElse(0);
+
+
         Label avgLabel = new Label(String.format("%.1f", avg) + unit);
         avgLabel.setFont(Font.font("Inter", FontWeight.BOLD, 36));
         avgLabel.setStyle("-fx-text-fill: white;");
@@ -609,8 +706,14 @@ public class SensorHubApp extends Application {
         valueBox.setPadding(new Insets(15));
         valueBox.setStyle("-fx-background-color: rgba(255,255,255,0.05); -fx-background-radius: 10;");
 
-        Label valueLabel = new Label(String.format("%.1f", sensor.getValue()));
-        valueLabel.setFont(Font.font("Inter", FontWeight.BOLD, 40));
+        Label valueLabel;
+
+        try {
+            double v = Double.parseDouble(sensor.getValue());
+            valueLabel = new Label(String.format("%.1f", v));
+        } catch (Exception e) {
+            valueLabel = new Label("--");
+        }        valueLabel.setFont(Font.font("Inter", FontWeight.BOLD, 40));
         valueLabel.setStyle("-fx-text-fill: white;");
 
         Label unitLabel = new Label(getUnit(sensor.getType()));
@@ -619,14 +722,23 @@ public class SensorHubApp extends Application {
         valueBox.getChildren().addAll(valueLabel, unitLabel);
 
         HBox buttonBox = new HBox(10);
-        Button statusBtn = new Button("Change Status");
-        statusBtn.setStyle("-fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: white; -fx-background-radius: 8; -fx-padding: 8 15;");
-        statusBtn.setOnAction(e -> showStatusDialog(sensor));
+        Button statusBtn = new Button("Update");
+        statusBtn.setCursor(Cursor.HAND);
+        statusBtn.setStyle("-fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: white; -fx-background-radius: 5; -fx-padding: 8 15;");
+        statusBtn.setOnAction(e -> showUpdateSensorDialog(sensor));
 
         Button deleteBtn = new Button("Delete");
-        deleteBtn.setStyle("-fx-background-color: rgba(239,68,68,0.2); -fx-text-fill: #fca5a5; -fx-background-radius: 8; -fx-padding: 8 15;");
+        deleteBtn.setCursor(Cursor.HAND);
+        deleteBtn.setStyle("-fx-background-color: rgba(239,68,68,0.2); -fx-text-fill: #fca5a5; -fx-background-radius: 5; -fx-padding: 8 15;");
         deleteBtn.setOnAction(e -> {
-            sensors.remove(sensor);
+            try {
+                System.out.println("id here : " + sensor.getId());
+                coordinator.getDeviceService().deleteTemperatureSensor(sensor.getId());
+                sensors.remove(sensor);
+                coordinator.getTemperatureManager().removeSensor(sensor.getId());
+            } catch (Exception ex) {
+                showAlert("Internal server error" , Alert.AlertType.ERROR);
+            }
             updateContent();
         });
 
@@ -657,7 +769,7 @@ public class SensorHubApp extends Application {
         typeBox.setValue("Temperature");
 
         ComboBox<String> statusBox = new ComboBox<>();
-            statusBox.getItems().addAll("Functional", "Maintenance");
+            statusBox.getItems().addAll("Active", "Stopped" , "Maintenance");
         statusBox.setValue("Active");
 
         grid.add(new Label("Sensor Name:"), 0, 0);
@@ -676,7 +788,7 @@ public class SensorHubApp extends Application {
                     showAlert("Please fill in the fields" , Alert.AlertType.WARNING);
                     return null;
                 }
-                return new Sensor(nameField.getText(), typeBox.getValue(), statusBox.getValue());
+                return new Sensor(null , nameField.getText(), typeBox.getValue(), statusBox.getValue());
             }
             return null;
         });
@@ -685,9 +797,9 @@ public class SensorHubApp extends Application {
             try{
                 if(sensor.getType().equals("Temperature")) {
                     TemperatureSensor newTmpSensor = coordinator.getDeviceService().saveTemperatureSensor(sensor.getName() , sensor.getStatus().toUpperCase());
-                    coordinator.getTemperatureManager().addSensor(new TemperatureSensorRunner(newTmpSensor , MqttClientProvider.getMqttClient()));
+                    coordinator.getTemperatureManager().addSensor(newTmpSensor);
+                    sensors.add(new Sensor(newTmpSensor.getId() , newTmpSensor.getName() , newTmpSensor.getType().toString() , newTmpSensor.getStatus().toString()));
                 }
-                sensors.add(sensor);
                 updateContent();
             }catch (Exception ex) {
                 ex.printStackTrace();
@@ -698,16 +810,68 @@ public class SensorHubApp extends Application {
         });
     }
 
-    private void showStatusDialog(Sensor sensor) {
-        ChoiceDialog<String> dialog = new ChoiceDialog<>(sensor.getStatus(), "Active", "Inactive", "Warning");
-        dialog.setTitle("Change Status");
-        dialog.setHeaderText("Select new status for " + sensor.getName());
 
-        dialog.showAndWait().ifPresent(status -> {
-            sensor.setStatus(status);
-            updateContent();
+    private void showUpdateSensorDialog(Sensor sensor) {
+
+        Dialog<Sensor> dialog = new Dialog<>();
+        dialog.setTitle("Update Sensor");
+        dialog.setHeaderText("Update sensor details");
+
+        ButtonType addButton = new ButtonType("Update Sensor", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(addButton, ButtonType.CANCEL);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+
+        TextField nameField = new TextField();
+        nameField.setText(sensor.getName());
+
+        ComboBox<String> statusBox = new ComboBox<>();
+        statusBox.getItems().addAll("Active", "Stopped" , "Maintenance");
+        statusBox.setValue(sensor.getStatus());
+
+        grid.add(new Label("Sensor Name:"), 0, 0);
+        grid.add(nameField, 1, 0);
+        grid.add(new Label("Status:"), 0, 2);
+        grid.add(statusBox, 1, 2);
+
+        dialog.getDialogPane().setContent(grid);
+
+        dialog.setResultConverter(btn -> {
+            if (btn == addButton) {
+                String name = nameField.getText().trim();
+                if(name.isEmpty()) {
+                    showAlert("Please fill in the fields" , Alert.AlertType.WARNING);
+                    return null;
+                }
+                return new Sensor(sensor.getId() , nameField.getText(), sensor.getType() , statusBox.getValue());
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(sen -> {
+            try{
+                if(sen.getType().equalsIgnoreCase("Temperature")) {
+                    coordinator.getDeviceService().updateTemperatureSensor(sen.getId() , sen.getName() , sen.getStatus().toUpperCase());
+                    TemperatureSensor updatedTemperatureSensor = coordinator.getDeviceService().getTemperatureSensorById(sen.getId());
+                    sensors.removeIf(s -> Objects.equals(s.getId() , sen.getId()));
+                    coordinator.getTemperatureManager().removeSensor(sen.getId());
+                    if(updatedTemperatureSensor.getStatus().equals(Status.ACTIVE))
+                        coordinator.getTemperatureManager().addSensor(updatedTemperatureSensor);
+                    sensors.add(new Sensor(updatedTemperatureSensor.getId() , updatedTemperatureSensor.getName()  ,updatedTemperatureSensor.getType().toString() , updatedTemperatureSensor.getStatus().toString()));
+                }
+                updateContent();
+            }catch (Exception ex) {
+                ex.printStackTrace();
+                showAlert("Internal Server Error" , Alert.AlertType.ERROR);
+            }
+
+
         });
     }
+
 
     private void exportCSV() {
         if (sensors.isEmpty()) return;
@@ -755,39 +919,70 @@ public class SensorHubApp extends Application {
 
     private String getUnit(String type) {
         switch (type) {
-            case "Temperature": return "°C";
-            case "Humidity": return "%";
-            case "Air Quality": return "AQI";
+            case "TEMPERATURE": return "°C";
+            case "HUMIDITY": return "%";
+            case "AIR_QUALITY": return "AQI";
             default: return "";
         }
     }
 
     private String getStatusColor(String status) {
-        switch (status) {
-            case "Active": return "#10b981";
-            case "Warning": return "#f59e0b";
-            case "Inactive": return "#6b7280";
-            default: return "#6b7280";
+        if (status == null) return "#9ca3af";
+
+        switch (status.toUpperCase()) {
+            case "ACTIVE":
+                return "#22c55e";
+
+            case "MAINTENANCE":
+                return "#f59e0b";
+
+            case "STOPPED":
+                return "#ef4444";
+
+            default:
+                return "#9ca3af";
         }
     }
 
+
     public static class Sensor {
+        private Long id;
         private String name;
         private String type;
-        private double value;
+        private String value = "--";
         private String status;
 
-        public Sensor(String name, String type, String status) {
+        public Sensor(Long id , String name, String type, String status) {
+            this.id = id;
             this.name = name;
             this.type = type;
             this.status = status;
         }
 
 
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+
+        public void setValue(String value) {
+            this.value = value;
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
 
         public String getName() { return name; }
         public String getType() { return type; }
-        public double getValue() { return value; }
+        public String getValue() { return value; }
         public String getStatus() { return status; }
         public void setStatus(String status) { this.status = status; }
     }

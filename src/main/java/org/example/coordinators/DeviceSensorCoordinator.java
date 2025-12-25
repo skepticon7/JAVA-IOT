@@ -43,9 +43,7 @@ public class DeviceSensorCoordinator {
 
     public void start(List<TemperatureSensor> sensors) throws SQLException, MqttException {
         temperatureReadingService.start();
-        sensors.forEach(tmp -> {
-            temperatureManager.addSensor(new TemperatureSensorRunner(tmp , temperatureReadingService.getMqttClient()));
-        });
+        sensors.forEach(temperatureManager::addSensor);
     }
 
 }

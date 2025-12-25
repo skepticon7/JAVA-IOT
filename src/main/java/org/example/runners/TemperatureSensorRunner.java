@@ -20,7 +20,7 @@ public class TemperatureSensorRunner extends DeviceRunner{
 
     @Override
     public double generateValue() {
-        while(this.temperatureSensor.getStatus().equals(Status.FUNCTIONAL))
+        while(this.temperatureSensor.getStatus().equals(Status.ACTIVE))
             return ReadersGenerators.temperatureGenerator.generate();
         return 0;
     }

@@ -45,8 +45,10 @@ public class DeviceService {
         deviceDAO.delete(sensor);
     }
 
-    public Optional<TemperatureSensor> getTemperatureSensorById(Long id) {
-        return deviceDAO.findTemperatureSensorById(id);
+    public TemperatureSensor getTemperatureSensorById(Long id) throws ClassNotFoundException {
+        return deviceDAO.findTemperatureSensorById(id).orElseThrow(
+                () -> new ClassNotFoundException("temperature sensor with id : " + id + " not found")
+        );
     }
 
     public List<TemperatureSensor> getAllTemperatureSensors() {

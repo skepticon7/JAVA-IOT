@@ -2,6 +2,7 @@ package org.example.manager;
 
 import org.example.model.Device;
 import org.example.model.TemperatureSensor;
+import org.example.mqtt.MqttClientProvider;
 import org.example.runners.DeviceRunner;
 import org.example.runners.TemperatureSensorRunner;
 
@@ -17,10 +18,11 @@ public class TemperatureManager {
     private final Map<Long , TemperatureSensorRunner> sensors = new HashMap<>();
     private final ExecutorService executorService = Executors.newCachedThreadPool();
 
-    public synchronized void addSensor(TemperatureSensorRunner sensor) {
-        if(!sensors.containsKey(sensor.getTemperatureSensor().getId())) {
-            sensors.put(sensor.getTemperatureSensor().getId(), sensor);
-            executorService.submit(sensor);
+    public synchronized void addSensor(TemperatureSensor sensor) {
+        TemperatureSensorRunner sensorRunner = new TemperatureSensorRunner(sensor , MqttClientProvider.getMqttClient());
+        if(!sensors.containsKey(sensor.getId())) {
+            sensors.put(sensor.getId(), sensorRunner);
+            executorService.submit(sensorRunner);
         }
     } 
 

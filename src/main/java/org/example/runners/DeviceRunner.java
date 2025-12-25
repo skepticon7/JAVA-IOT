@@ -39,8 +39,8 @@ public abstract class DeviceRunner implements Runnable{
 
     @Override
     public void run() {
-        if (device.getStatus() == Status.FUNCTIONAL) {
-            while (active && device.getStatus() == Status.FUNCTIONAL) {
+        if (device.getStatus() == Status.ACTIVE) {
+            while (active && device.getStatus() == Status.ACTIVE) {
                 double value = generateValue();
                 publishTelemetry(value);
                 sleep();
@@ -79,7 +79,6 @@ public abstract class DeviceRunner implements Runnable{
         }
     }
 
-    // Each subclass must implement these
     public abstract double generateValue();
     public abstract void readValue();
 }

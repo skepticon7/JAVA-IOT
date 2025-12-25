@@ -5,6 +5,7 @@ import org.eclipse.paho.client.mqttv3.*;
 import org.example.dao.repository.IReadingDAO;
 import org.example.model.Reading;
 import org.example.service.ReadingService;
+import org.example.util.MqttConnectionListener;
 import org.example.util.SensorTelemetry;
 import org.example.util.TemperatureListener;
 import tools.jackson.databind.ObjectMapper;
@@ -14,15 +15,19 @@ import tools.jackson.datatype.jsr310.JavaTimeModule;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TemperatureReadingService implements MqttCallback {
+public class TemperatureReadingService implements MqttCallbackExtended {
 
     private final MqttClient mqttClient;
     private final ObjectMapper objectMapper;
     private final ReadingService readingService;
-    private final List<TemperatureListener> listeners = new ArrayList<>();
+    private MqttConnectionListener connectionListener;
 
     public MqttClient getMqttClient() {
         return mqttClient;
+    }
+
+    public void setConnectionListener(MqttConnectionListener connectionListener) {
+        this.connectionListener = connectionListener;
     }
 
     public TemperatureReadingService(MqttClient mqttClient, ReadingService readingService) {
@@ -42,9 +47,18 @@ public class TemperatureReadingService implements MqttCallback {
         mqttClient.subscribe("iot/TEMPERATURE/+/telemetry");
     }
 
+    private void handleConnect() {
+        if (connectionListener != null) connectionListener.onConnect();
+    }
+
+    private void handleDisconnect(Throwable cause) {
+        if (connectionListener != null) connectionListener.onDisconnect(cause);
+    }
+
     @Override
     public void connectionLost(Throwable throwable) {
         System.out.println("MQTT Connection Lost: " + throwable.getMessage());
+        handleDisconnect(throwable);
     }
 
     @Override
@@ -64,4 +78,10 @@ public class TemperatureReadingService implements MqttCallback {
 
     @Override
     public void deliveryComplete(IMqttDeliveryToken iMqttDeliveryToken) {}
+
+    @Override
+    public void connectComplete(boolean b, String s) {
+        System.out.println("MQTT Connected to " + s);
+        handleConnect();
+    }
 }
