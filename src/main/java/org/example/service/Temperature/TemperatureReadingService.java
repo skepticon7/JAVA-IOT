@@ -21,6 +21,7 @@ public class TemperatureReadingService implements MqttCallbackExtended {
     private final ObjectMapper objectMapper;
     private final ReadingService readingService;
     private MqttConnectionListener connectionListener;
+    
 
     public MqttClient getMqttClient() {
         return mqttClient;
@@ -42,8 +43,13 @@ public class TemperatureReadingService implements MqttCallbackExtended {
 
     public void start() throws MqttException {
         if (!mqttClient.isConnected()) {
-            mqttClient.connect();
+            MqttConnectOptions options = new MqttConnectOptions();
+            options.setAutomaticReconnect(true);
+            options.setCleanSession(true);
+            mqttClient.connect(options);
         }
+        System.out.println("connected");
+        handleConnect();
         mqttClient.subscribe("iot/TEMPERATURE/+/telemetry");
     }
 
@@ -82,6 +88,5 @@ public class TemperatureReadingService implements MqttCallbackExtended {
     @Override
     public void connectComplete(boolean b, String s) {
         System.out.println("MQTT Connected to " + s);
-        handleConnect();
     }
 }

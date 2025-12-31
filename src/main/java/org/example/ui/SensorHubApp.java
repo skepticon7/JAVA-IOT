@@ -84,7 +84,7 @@ public class SensorHubApp extends Application {
             temperatureSensorList.forEach(tmp -> {
                 sensors.add(new Sensor(tmp.getId() , tmp.getName() , tmp.getType().toString() , tmp.getStatus().toString()));
             });
-            sensors.forEach(this::createSensorCard);
+//            sensors.forEach(this::createSensorCard);
 
             List<TemperatureSensor> activeTemperatureSensors = temperatureSensorList.stream().filter(sensor -> sensor.getStatus().equals(Status.ACTIVE)).toList();
             coordinator.start(activeTemperatureSensors);
@@ -95,7 +95,7 @@ public class SensorHubApp extends Application {
                 });
             });
 
-        }catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
             showAlert("Failed to load sensors from DB", Alert.AlertType.ERROR);
         }
@@ -108,7 +108,6 @@ public class SensorHubApp extends Application {
                 Platform.runLater(() -> {
                     mqttStatusLabel.setText("MQTT Connected");
                     mqttStatusLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
-                    loadSensorsFromDB(); // reload active sensors
                 });
             }
 
@@ -122,6 +121,7 @@ public class SensorHubApp extends Application {
                     for (Sensor s : sensors) {
                         s.setValue("--");
                     }
+                    coordinator.getTemperatureManager().stopAll();
                     updateContent();
                 });
             }
@@ -341,12 +341,12 @@ public class SensorHubApp extends Application {
         scrollPane.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
         mainLayout.setCenter(scrollPane);
 
-//        mqttStatusLabel = new Label("MQTT Disconnected");
-//        mqttStatusLabel.setFont(Font.font("Inter", FontWeight.BOLD, 16));
-//        mqttStatusLabel.setStyle("-fx-text-fill: red; -fx-padding: 10;");
-//        contentArea.getChildren().add(0, mqttStatusLabel);
+        mqttStatusLabel = new Label("MQTT Disconnected");
+        mqttStatusLabel.setFont(Font.font("Inter", FontWeight.BOLD, 16));
+        mqttStatusLabel.setStyle("-fx-text-fill: red; -fx-padding: 10;");
+        contentArea.getChildren().add(0, mqttStatusLabel);
 
-//        setupMqttStatusListener();
+        setupMqttStatusListener();
 
         loadSensorsFromDB();
         updateContent();
@@ -473,6 +473,7 @@ public class SensorHubApp extends Application {
 
     private void updateContent() {
         contentArea.getChildren().clear();
+        contentArea.getChildren().add(0, mqttStatusLabel);
 
         if (selectedView.equals("Dashboard")) {
             showDashboardView();
