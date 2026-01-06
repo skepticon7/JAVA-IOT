@@ -542,7 +542,7 @@ public class SensorHubApp extends Application {
 
         typeGrid.add(createTypeStatCard("Temperature", "°C", "#ef4444"), 0, 0);
         typeGrid.add(createTypeStatCard("Humidity", "%", "#3b82f6"), 1, 0);
-        typeGrid.add(createTypeStatCard("Air_Quality", "AQI", "#10b981"), 2, 0);
+        typeGrid.add(createTypeStatCard("AIR_QUALITY", "AQI", "#10b981"), 2, 0);
 
         contentArea.getChildren().addAll(title, statsGrid, statusBox, typeGrid);
     }
@@ -663,10 +663,10 @@ public class SensorHubApp extends Application {
         Label title = new Label(type + " Sensors");
         title.setFont(Font.font("Inter", FontWeight.BOLD, 28));
         title.setStyle("-fx-text-fill: white;");
-
+        String normalizedType = type.replace(" ", "_").toUpperCase(); // Converts "Air Quality" to "AIR_QUALITY"
         List<Sensor> typeSensors = new ArrayList<>();
         for (Sensor s : sensors) {
-            if (s.getType().equalsIgnoreCase(type)) {
+            if (s.getType().equalsIgnoreCase(normalizedType)) {
                 typeSensors.add(s);
             }
         }
