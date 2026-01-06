@@ -939,7 +939,13 @@ public class SensorHubApp extends Application {
             try (PrintWriter pw = new PrintWriter(file)) {
                 pw.println("Name,Type,Value,Status");
                 for (Sensor s : sensors) {
-                    pw.printf("%s,%s,%.2f,%s%n", s.getName(), s.getType(), s.getValue(), s.getStatus());
+                    // FIXED: Changed %.2f to %s to match the String type of s.getValue()
+                    pw.printf("%s,%s,%s,%s%n",
+                            s.getName(),
+                            s.getType(),
+                            s.getValue(),
+                            s.getStatus()
+                    );
                 }
 
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
