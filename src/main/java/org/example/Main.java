@@ -8,11 +8,15 @@ import org.example.dao.implementation.DeviceDAO;
 import org.example.dao.implementation.ReadingDAO;
 import org.example.enums.DeviceType;
 import org.example.enums.Status;
+import org.example.manager.AirQualityManager;
+import org.example.manager.HumidityManager;
 import org.example.manager.TemperatureManager;
 import org.example.model.Device;
 import org.example.model.TemperatureSensor;
 import org.example.mqtt.MqttClientProvider;
+import org.example.service.AirQuality.AirQualityReadingService;
 import org.example.service.DeviceService;
+import org.example.service.Humidity.HumidityReadingService;
 import org.example.service.ReadingService;
 import org.example.service.Temperature.TemperatureReadingService;
 import org.example.ui.SensorHubApp;
@@ -43,8 +47,12 @@ public class Main {
         ReadingService readingService = new ReadingService(readingDAO , deviceDAO);
 
         TemperatureManager temperatureManager = new TemperatureManager();
+        HumidityManager humidityManager = new HumidityManager();
+        AirQualityManager airQualityManager = new AirQualityManager();
 
         TemperatureReadingService temperatureReadingService = new TemperatureReadingService(mqttClient , readingService);
+        HumidityReadingService humidityReadingService = new HumidityReadingService(mqttClient , readingService);
+        AirQualityReadingService airQualityReadingService = new AirQualityReadingService(mqttClient , readingService);
 
 
 
@@ -52,7 +60,11 @@ public class Main {
                 deviceService,
                 readingService,
                 temperatureManager,
-                temperatureReadingService
+                humidityManager,
+                airQualityManager,
+                temperatureReadingService,
+                humidityReadingService,
+                airQualityReadingService
         );
 
         SensorHubApp.launchApp(deviceSensorCoordinator , args);

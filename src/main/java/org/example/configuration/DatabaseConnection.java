@@ -9,9 +9,9 @@ public class DatabaseConnection {
     private static DatabaseConnection instance;
     private Connection connection;
 
-    private final String URL = "jdbc:mysql://localhost:3306/iotdb";
+    private final String URL = "jdbc:mysql://localhost:3306/iot_db";
     private final String USER = "root";
-    private final String PASSWORD = "1234";
+    private final String PASSWORD = "";
 
     private DatabaseConnection() {
         try{

@@ -27,7 +27,9 @@ import javafx.util.Duration;
 import org.example.coordinators.DeviceSensorCoordinator;
 import org.example.enums.DeviceType;
 import org.example.enums.Status;
+import org.example.model.AirQualitySensor;
 import org.example.model.Device;
+import org.example.model.HumiditySensor;
 import org.example.model.Reading;
 import org.example.model.TemperatureSensor;
 import org.example.mqtt.MqttClientProvider;
@@ -80,14 +82,30 @@ public class SensorHubApp extends Application {
     private void loadSensorsFromDB() {
         try{
             sensors.clear();
+
+            // Load Temperature sensors
             List<TemperatureSensor> temperatureSensorList = coordinator.getDeviceService().getAllTemperatureSensors();
             temperatureSensorList.forEach(tmp -> {
                 sensors.add(new Sensor(tmp.getId() , tmp.getName() , tmp.getType().toString() , tmp.getStatus().toString()));
             });
-//            sensors.forEach(this::createSensorCard);
+
+            // Load Humidity sensors
+            List<HumiditySensor> humiditySensorList = coordinator.getDeviceService().getAllHumiditySensors();
+            humiditySensorList.forEach(hum -> {
+                sensors.add(new Sensor(hum.getId() , hum.getName() , hum.getType().toString() , hum.getStatus().toString()));
+            });
+
+            // Load Air Quality sensors
+            List<AirQualitySensor> airQualitySensorList = coordinator.getDeviceService().getAllAirQualitySensors();
+            airQualitySensorList.forEach(air -> {
+                sensors.add(new Sensor(air.getId() , air.getName() , air.getType().toString() , air.getStatus().toString()));
+            });
 
             List<TemperatureSensor> activeTemperatureSensors = temperatureSensorList.stream().filter(sensor -> sensor.getStatus().equals(Status.ACTIVE)).toList();
-            coordinator.start(activeTemperatureSensors);
+            List<HumiditySensor> activeHumiditySensors = humiditySensorList.stream().filter(sensor -> sensor.getStatus().equals(Status.ACTIVE)).toList();
+            List<AirQualitySensor> activeAirQualitySensors = airQualitySensorList.stream().filter(sensor -> sensor.getStatus().equals(Status.ACTIVE)).toList();
+
+            coordinator.start(activeTemperatureSensors, activeHumiditySensors, activeAirQualitySensors);
 
             coordinator.getReadingService().addListener(reading -> {
                 Platform.runLater(() -> {
@@ -122,6 +140,8 @@ public class SensorHubApp extends Application {
                         s.setValue("--");
                     }
                     coordinator.getTemperatureManager().stopAll();
+                    coordinator.getHumidityManager().stopAll();
+                    coordinator.getAirQualityManager().stopAll();
                     updateContent();
                 });
             }
@@ -734,9 +754,17 @@ public class SensorHubApp extends Application {
         deleteBtn.setOnAction(e -> {
             try {
                 System.out.println("id here : " + sensor.getId());
-                coordinator.getDeviceService().deleteTemperatureSensor(sensor.getId());
+                if(sensor.getType().equalsIgnoreCase("TEMPERATURE")) {
+                    coordinator.getDeviceService().deleteTemperatureSensor(sensor.getId());
+                    coordinator.getTemperatureManager().removeSensor(sensor.getId());
+                } else if(sensor.getType().equalsIgnoreCase("HUMIDITY")) {
+                    coordinator.getDeviceService().deleteHumiditySensor(sensor.getId());
+                    coordinator.getHumidityManager().removeSensor(sensor.getId());
+                } else if(sensor.getType().equalsIgnoreCase("AIR_QUALITY")) {
+                    coordinator.getDeviceService().deleteAirQualitySensor(sensor.getId());
+                    coordinator.getAirQualityManager().removeSensor(sensor.getId());
+                }
                 sensors.remove(sensor);
-                coordinator.getTemperatureManager().removeSensor(sensor.getId());
             } catch (Exception ex) {
                 showAlert("Internal server error" , Alert.AlertType.ERROR);
             }
@@ -800,6 +828,14 @@ public class SensorHubApp extends Application {
                     TemperatureSensor newTmpSensor = coordinator.getDeviceService().saveTemperatureSensor(sensor.getName() , sensor.getStatus().toUpperCase());
                     coordinator.getTemperatureManager().addSensor(newTmpSensor);
                     sensors.add(new Sensor(newTmpSensor.getId() , newTmpSensor.getName() , newTmpSensor.getType().toString() , newTmpSensor.getStatus().toString()));
+                } else if(sensor.getType().equals("Humidity")) {
+                    HumiditySensor newHumSensor = coordinator.getDeviceService().saveHumiditySensor(sensor.getName() , sensor.getStatus().toUpperCase());
+                    coordinator.getHumidityManager().addSensor(newHumSensor);
+                    sensors.add(new Sensor(newHumSensor.getId() , newHumSensor.getName() , newHumSensor.getType().toString() , newHumSensor.getStatus().toString()));
+                } else if(sensor.getType().equals("Air Quality")) {
+                    AirQualitySensor newAirSensor = coordinator.getDeviceService().saveAirQualitySensor(sensor.getName() , sensor.getStatus().toUpperCase());
+                    coordinator.getAirQualityManager().addSensor(newAirSensor);
+                    sensors.add(new Sensor(newAirSensor.getId() , newAirSensor.getName() , newAirSensor.getType().toString() , newAirSensor.getStatus().toString()));
                 }
                 updateContent();
             }catch (Exception ex) {
@@ -854,7 +890,7 @@ public class SensorHubApp extends Application {
 
         dialog.showAndWait().ifPresent(sen -> {
             try{
-                if(sen.getType().equalsIgnoreCase("Temperature")) {
+                if(sen.getType().equalsIgnoreCase("TEMPERATURE")) {
                     coordinator.getDeviceService().updateTemperatureSensor(sen.getId() , sen.getName() , sen.getStatus().toUpperCase());
                     TemperatureSensor updatedTemperatureSensor = coordinator.getDeviceService().getTemperatureSensorById(sen.getId());
                     sensors.removeIf(s -> Objects.equals(s.getId() , sen.getId()));
@@ -862,6 +898,22 @@ public class SensorHubApp extends Application {
                     if(updatedTemperatureSensor.getStatus().equals(Status.ACTIVE))
                         coordinator.getTemperatureManager().addSensor(updatedTemperatureSensor);
                     sensors.add(new Sensor(updatedTemperatureSensor.getId() , updatedTemperatureSensor.getName()  ,updatedTemperatureSensor.getType().toString() , updatedTemperatureSensor.getStatus().toString()));
+                } else if(sen.getType().equalsIgnoreCase("HUMIDITY")) {
+                    coordinator.getDeviceService().updateHumiditySensor(sen.getId() , sen.getName() , sen.getStatus().toUpperCase());
+                    HumiditySensor updatedHumiditySensor = coordinator.getDeviceService().getHumiditySensorById(sen.getId());
+                    sensors.removeIf(s -> Objects.equals(s.getId() , sen.getId()));
+                    coordinator.getHumidityManager().removeSensor(sen.getId());
+                    if(updatedHumiditySensor.getStatus().equals(Status.ACTIVE))
+                        coordinator.getHumidityManager().addSensor(updatedHumiditySensor);
+                    sensors.add(new Sensor(updatedHumiditySensor.getId() , updatedHumiditySensor.getName()  ,updatedHumiditySensor.getType().toString() , updatedHumiditySensor.getStatus().toString()));
+                } else if(sen.getType().equalsIgnoreCase("AIR_QUALITY")) {
+                    coordinator.getDeviceService().updateAirQualitySensor(sen.getId() , sen.getName() , sen.getStatus().toUpperCase());
+                    AirQualitySensor updatedAirQualitySensor = coordinator.getDeviceService().getAirQualitySensorById(sen.getId());
+                    sensors.removeIf(s -> Objects.equals(s.getId() , sen.getId()));
+                    coordinator.getAirQualityManager().removeSensor(sen.getId());
+                    if(updatedAirQualitySensor.getStatus().equals(Status.ACTIVE))
+                        coordinator.getAirQualityManager().addSensor(updatedAirQualitySensor);
+                    sensors.add(new Sensor(updatedAirQualitySensor.getId() , updatedAirQualitySensor.getName()  ,updatedAirQualitySensor.getType().toString() , updatedAirQualitySensor.getStatus().toString()));
                 }
                 updateContent();
             }catch (Exception ex) {

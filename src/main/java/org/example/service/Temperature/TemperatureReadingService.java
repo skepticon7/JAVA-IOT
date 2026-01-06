@@ -70,6 +70,7 @@ public class TemperatureReadingService implements MqttCallbackExtended {
     @Override
     public void messageArrived(String topic, MqttMessage mqttMessage) throws Exception {
         String payload = new String(mqttMessage.getPayload());
+        payload = payload.replaceAll("(\\d+),(\\d+)", "$1.$2");
         try {
             SensorTelemetry sensorTelemetry = objectMapper.readValue(payload, SensorTelemetry.class);
             readingService.createReading(sensorTelemetry.getDeviceId() , sensorTelemetry.getValue() , sensorTelemetry.getTimestamp());
